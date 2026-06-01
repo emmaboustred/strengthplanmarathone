@@ -231,6 +231,36 @@
   .cal-sum-fill-missed{background:#d64545}
   .cal-sum-stats{display:flex;gap:18px;font-size:12px;color:rgba(244,241,236,.6)}
   .cal-sum-stats strong{color:var(--off-white);font-weight:600}
+
+  /* ── LOG CALENDAR GRID ── */
+  .log-toggle-bar{display:flex;gap:6px;margin-bottom:16px}
+  .log-view-btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;letter-spacing:.04em;padding:7px 16px;border-radius:5px;border:1px solid var(--mid);background:#fff;color:var(--muted);cursor:pointer;transition:all .15s}
+  .log-view-btn.active{background:var(--black);color:var(--off-white);border-color:var(--black)}
+  .logcal-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--mid);border-radius:8px;background:#fff}
+  .logcal{width:100%;min-width:680px;border-collapse:collapse}
+  .logcal th{font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 6px;text-align:left;border-bottom:1px solid var(--mid);background:var(--cream)}
+  .logcal th.wk-col{width:54px;text-align:center}
+  .logcal td{vertical-align:top;padding:8px 7px;border-bottom:1px solid var(--cream);border-right:1px solid var(--cream);height:74px}
+  .logcal td:last-child{border-right:none}
+  .logcal td.wk-cell{text-align:center;background:#fafaf8;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.04em;color:var(--muted);width:54px}
+  .logcal td.wk-cell small{display:block;font-family:'DM Sans',sans-serif;font-size:9px;letter-spacing:.06em;color:var(--mid);margin-top:2px;font-weight:500}
+  .logcal-event{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.35;margin-bottom:4px;color:var(--black)}
+  .logcal-event:last-child{margin-bottom:0}
+  .logcal-bar{width:3px;align-self:stretch;border-radius:2px;flex-shrink:0;min-height:14px}
+  .bar-run{background:#2e9c63}
+  .bar-strength{background:#5a8fc7}
+  .bar-pilates{background:var(--pilates)}
+  .bar-mtb{background:#d97b3b}
+  .bar-missed{background:#d64545}
+  .logcal-event.missed-ev{color:var(--mid);text-decoration:line-through;text-decoration-color:rgba(214,69,69,.4)}
+  .logcal-ev-text{flex:1;min-width:0}
+  .logcal-ev-detail{font-size:10px;color:var(--muted);margin-top:1px}
+  .logcal-empty-day{color:var(--mid);font-size:11px}
+  .logcal-rest{color:var(--mid);font-size:10px;font-style:italic}
+  @media(max-width:600px){
+    .logcal-scroll-hint{display:block;font-size:11px;color:var(--muted);margin-bottom:8px;font-style:italic}
+  }
+  .logcal-scroll-hint{display:none}
 </style>
 </head>
 <body>
@@ -331,8 +361,13 @@
   <div class="main">
     <div class="log-view-title">My Training Log</div>
     <div class="log-view-sub">All saved runs and gym sessions across 16 weeks.</div>
+    <div class="log-toggle-bar">
+      <button class="log-view-btn active" id="logbtn-cal" onclick="setLogMode('cal')">📅 Calendar</button>
+      <button class="log-view-btn" id="logbtn-list" onclick="setLogMode('list')">☰ List</button>
+    </div>
     <button class="btn-clear-log" onclick="clearAllLog()">Clear all log data</button>
-    <div id="log-entries"></div>
+    <div id="log-calendar"></div>
+    <div id="log-entries" style="display:none"></div>
   </div>
 </div>
 
@@ -435,6 +470,12 @@ function renderRunWeek() {
           ${logBtn('thu')}
           ${runLogPanel(w,'thu',thuSaved)}
         </div>
+        <div class="run-day saturday">
+          <div class="run-day-label"><span class="day-dot dot-sat"></span>Saturday — MTB ${savedBadge(satSaved)}</div>
+          ${satContent}
+          ${wk.sat.mtb ? logBtn('sat') : ''}
+          ${wk.sat.mtb ? runLogPanel(w,'sat',satSaved) : ''}
+        </div>
         <div class="run-day sunday ${wk.sun.isBenchmark?'benchmark-day':''} ${wk.sun.isRace?'benchmark-day':''}">
           <div class="run-day-label"><span class="day-dot dot-sun"></span>Sunday — Long Run ${savedBadge(sunSaved)}</div>
           <div class="run-day-main">${wk.sun.km}</div>
@@ -442,12 +483,6 @@ function renderRunWeek() {
           ${sunNote}
           ${logBtn('sun')}
           ${runLogPanel(w,'sun',sunSaved)}
-        </div>
-        <div class="run-day saturday">
-          <div class="run-day-label"><span class="day-dot dot-sat"></span>Saturday — MTB ${savedBadge(satSaved)}</div>
-          ${satContent}
-          ${wk.sat.mtb ? logBtn('sat') : ''}
-          ${wk.sat.mtb ? runLogPanel(w,'sat',satSaved) : ''}
         </div>
       </div>
     </div>`;
@@ -887,6 +922,106 @@ function renderLogView(){
   container.innerHTML = hasAny ? html : '<div class="log-empty">No logged sessions yet. Open a week in Running or Strength and tap Log.</div>';
 }
 
+// ── Log view mode toggle ──
+let logMode = 'cal';
+function setLogMode(mode){
+  logMode = mode;
+  document.getElementById('logbtn-cal').classList.toggle('active', mode==='cal');
+  document.getElementById('logbtn-list').classList.toggle('active', mode==='list');
+  document.getElementById('log-calendar').style.display = mode==='cal' ? 'block' : 'none';
+  document.getElementById('log-entries').style.display = mode==='list' ? 'block' : 'none';
+  if(mode==='cal') renderLogCalendar();
+  else renderLogView();
+}
+
+// ── Calendar grid log (week-per-row, Mon→Sun) ──
+function renderLogCalendar(){
+  const dayCols = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let rows = '';
+
+  for(let w=1; w<=16; w++){
+    const wk = RUN_WEEKS[w-1];
+    const phase = getPhaseForWeek(w);
+    const hasSatGym = !!phase.sessions.find(s=>s.id==='d2');
+
+    // Build each day's events
+    const cells = {};
+
+    // Monday — rest
+    cells.Mon = `<span class="logcal-rest">Rest</span>`;
+
+    // Tuesday — run
+    cells.Tue = runEventCell(w, 'tue', '🏃', `${wk.tue.km} ${cap(wk.tue.effort)}`, 'bar-run');
+
+    // Wednesday — strength d1
+    cells.Wed = strengthEventCell(w, 'd1', '💪', 'Gym strength', 'bar-strength', 'wed');
+
+    // Thursday — quality run
+    cells.Thu = runEventCell(w, 'thu', '⚡', `${wk.thu.main}`, 'bar-run');
+
+    // Friday — pilates d3
+    cells.Fri = strengthEventCell(w, 'd3', '🧘', 'Pilates', 'bar-pilates', 'fri');
+
+    // Saturday — gym + MTB
+    let sat = '';
+    if(hasSatGym) sat += strengthEventCell(w, 'd2', '💪', 'Gym strength', 'bar-strength', 'sat-gym');
+    if(wk.sat.mtb) sat += runEventCell(w, 'sat', '🚵', `MTB ${wk.sat.mtb}`, 'bar-mtb');
+    else sat += `<span class="logcal-rest">No ride</span>`;
+    cells.Sat = sat;
+
+    // Sunday — long run
+    let sunLabel = `${wk.sun.km} long`;
+    if(wk.sun.isRace) sunLabel = `🏁 RACE ${wk.sun.km}`;
+    else if(wk.sun.isBenchmark) sunLabel = `Benchmark ${wk.sun.km}`;
+    cells.Sun = runEventCell(w, 'sun', wk.sun.isRace?'🏆':'🏅', sunLabel, 'bar-run');
+
+    const tags = wk.tags.length ? wk.tags[0] : '';
+    rows += `<tr>
+      <td class="wk-cell">${w}<small>${tags||('P'+phase.num)}</small></td>
+      ${dayCols.map(d=>`<td>${cells[d]||'<span class="logcal-empty-day">—</span>'}</td>`).join('')}
+    </tr>`;
+  }
+
+  const html = `
+    <div class="logcal-scroll-hint">← swipe to see all days →</div>
+    <div class="logcal-wrap">
+      <table class="logcal">
+        <thead><tr>
+          <th class="wk-col">Wk</th>
+          <th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  document.getElementById('log-calendar').innerHTML = html;
+}
+
+// Helper: a running/MTB event cell — green if logged, red strike if missed, plain if upcoming
+function runEventCell(w, day, icon, label, barCls){
+  const d = loadData(`run_w${w}_${day}`);
+  const logged = !!(d && (d.km||d.time));
+  if(logged){
+    const detail = `${d.km||'—'}km${d.pace?' · '+d.pace+'/km':''}`;
+    return `<div class="logcal-event"><span class="logcal-bar ${barCls}"></span><span class="logcal-ev-text">${label}<div class="logcal-ev-detail">${detail}</div></span></div>`;
+  }
+  if(isMissed(w, day==='sat'?'sat-mtb':day) || isMissed(w, day)){
+    return `<div class="logcal-event missed-ev"><span class="logcal-bar bar-missed"></span><span class="logcal-ev-text">${label}</span></div>`;
+  }
+  return `<div class="logcal-event" style="opacity:.45"><span class="logcal-bar" style="background:var(--mid)"></span><span class="logcal-ev-text">${label}</span></div>`;
+}
+
+// Helper: a strength/pilates event cell
+function strengthEventCell(w, sessId, icon, label, barCls, missedSlot){
+  const logged = strengthSessionLogged(w, sessId);
+  if(logged){
+    return `<div class="logcal-event"><span class="logcal-bar ${barCls}"></span><span class="logcal-ev-text">${label}<div class="logcal-ev-detail">✓ done</div></span></div>`;
+  }
+  if(missedSlot && isMissed(w, missedSlot)){
+    return `<div class="logcal-event missed-ev"><span class="logcal-bar bar-missed"></span><span class="logcal-ev-text">${label}</span></div>`;
+  }
+  return `<div class="logcal-event" style="opacity:.45"><span class="logcal-bar" style="background:var(--mid)"></span><span class="logcal-ev-text">${label}</span></div>`;
+}
+
 // ═══════════════════════════════════════════════
 //  CALENDAR VIEW
 // ═══════════════════════════════════════════════
@@ -1072,7 +1207,7 @@ function switchView(name){
   document.querySelectorAll('.main-nav a').forEach(a=>a.classList.remove('active'));
   const map={calendar:'cal-nav',running:'run-nav',strength:'p1',log:'log-nav'};
   document.querySelector(`.main-nav a.${map[name]}`)?.classList.add('active');
-  if(name==='log') renderLogView();
+  if(name==='log'){ if(logMode==='cal') renderLogCalendar(); else renderLogView(); }
   if(name==='calendar') renderCalendarWeek();
 }
 
