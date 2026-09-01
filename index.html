@@ -689,7 +689,7 @@
         <option value="13">Week 13</option><option value="14">Week 14</option><option value="15">Week 15</option>
         <option value="16">Week 16</option>
       </select>
-      <span class="week-badge" id="run-phase-badge" style="background:var(--run)"></span>
+      <span class="week-badge" id="run-phase-badge"></span>
     </div>
     <div class="effort-legend">
       <span class="effort-chip ec-easy">Easy — conversational</span>
@@ -726,7 +726,7 @@
 <div class="view" id="view-log">
   <div class="main">
     <div class="log-view-title">My Training Log</div>
-    <div class="log-view-sub">All saved runs and gym sessions across 16 weeks.</div>
+    <div class="log-view-sub" id="log-view-sub">All saved runs and gym sessions across 16 weeks.</div>
     <div class="log-toggle-bar">
       <button class="log-view-btn active" id="logbtn-cal" onclick="setLogMode('cal')">📅 Calendar</button>
       <button class="log-view-btn" id="logbtn-list" onclick="setLogMode('list')">☰ List</button>
@@ -782,6 +782,7 @@ function renderRunWeek() {
   const badge = document.getElementById('run-phase-badge');
   const phaseNames = ['Build 1','Build 1','Build 1','Build 1','Build 1','Peak 1','Recovery','Build 2','Build 2','Build 2','Peak 2','Peak 2','Recovery','Taper','Taper','Race Week'];
   badge.textContent = phaseNames[w-1];
+  badge.style.background = 'var(--p2)';
 
   const tagHtml = wk.tags.map(t => `<span class="run-tag ${t}">${t}</span>`).join('');
 
@@ -877,6 +878,7 @@ function renderSFARunWeek() {
   const phase = getSFAPhaseForWeek(w);
   const badge = document.getElementById('run-phase-badge');
   badge.textContent = phase ? phase.name : wk.phase;
+  badge.style.background = phase ? 'var(--'+phase.color+')' : 'var(--p1)';
 
   function runLogPanel(day, saved) {
     const v = saved || {};
@@ -1414,7 +1416,11 @@ function loadData(key){ return lsGet(key); }
 // Clear all data locally and in Supabase
 function clearAllLog(){
   if(!confirm('Delete all saved log data everywhere? This cannot be undone.')) return;
-  try{ Object.keys(localStorage).filter(k=>k.startsWith('msp_')||k.startsWith('run_')||k.startsWith('cal_')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  try{
+    Object.keys(localStorage)
+      .filter(k=>k.startsWith('hm_')||k.startsWith('sfa_')||k.startsWith('msp_')||k.startsWith('run_')||k.startsWith('cal_'))
+      .forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
   if(SUPABASE_KEY!=='REPLACE_ME'){
     fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
       method:'DELETE',
@@ -1672,28 +1678,31 @@ function togglePilates(week,sessId,exId){
 function renderLogView(){
   const container=document.getElementById('log-entries');
   let hasAny=false, html='';
-  for(let w=1;w<=16;w++){
+  const maxWeeks = CURRENT_PROG==='sfa' ? 12 : 16;
+  const runDays = CURRENT_PROG==='sfa'
+    ? [{key:'tue',label:'Tuesday'},{key:'thu',label:'Thursday'},{key:'sat',label:'Saturday'},{key:'sun',label:'Sunday'}]
+    : [{key:'tue',label:'Tuesday'},{key:'thu',label:'Thursday'},{key:'sat',label:'Saturday MTB'},{key:'sun',label:'Sunday'}];
+
+  for(let w=1;w<=maxWeeks;w++){
     let weekHtml='', runHtml='', strHtml='';
-    // Running log
-    const days=[{key:'tue',label:'Tuesday'},{key:'thu',label:'Thursday'},{key:'sun',label:'Sunday'},{key:'sat',label:'Saturday MTB'}];
-    days.forEach(({key,label})=>{
+    runDays.forEach(({key,label})=>{
       const d=loadData(runKey(w,key)); if(!d||(!d.km&&!d.time)) return;
       hasAny=true;
       runHtml+=`<div class="log-entry">
-        <div class="log-entry-hdr"><span class="log-entry-name">${label}</span><span class="log-entry-session" style="color:var(--run)">🏃 Running</span></div>
+        <div class="log-entry-hdr"><span class="log-entry-name">${label}</span><span class="log-entry-session" style="color:var(--p2)">🏃 Running</span></div>
         <div class="log-entry-sets">${d.km||'—'} km · ${d.time||'—'} · ${d.pace||'—'}/km${d.hr?' · ♥ '+d.hr+' bpm':''}${d.note?' · <em>'+d.note+'</em>':''}</div>
       </div>`;
     });
-    // Strength log
     const phase=getPhaseForWeek(w);
+    if(!phase) continue;
     phase.sessions.forEach(sess=>{
       sess.exercises.forEach(ex=>{
         const data=loadData(storageKey(w,sess.id,ex.id)); if(!data) return;
         if(sess.pilates){
           if(!data.done) return; hasAny=true;
           strHtml+=`<div class="log-entry">
-            <div class="log-entry-hdr"><span class="log-entry-name">${ex.name}</span><span class="log-entry-session" style="color:var(--pilates)">🧘 Pilates</span></div>
-            <div class="log-entry-sets" style="color:var(--p3)">✓ Completed</div>
+            <div class="log-entry-hdr"><span class="log-entry-name">${ex.name}</span><span class="log-entry-session" style="color:var(--pilates)">🧘 Mobility</span></div>
+            <div class="log-entry-sets" style="color:var(--p1)">✓ Completed</div>
           </div>`;
         } else {
           if(!data.sets?.some(s=>s.reps||s.weight)) return; hasAny=true;
@@ -1729,47 +1738,44 @@ function setLogMode(mode){
 // ── Calendar grid log (week-per-row, Mon→Sun) ──
 function renderLogCalendar(){
   const dayCols = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const maxWeeks = CURRENT_PROG==='sfa' ? 12 : 16;
   let rows = '';
 
-  for(let w=1; w<=16; w++){
-    const wk = RUN_WEEKS[w-1];
+  for(let w=1; w<=maxWeeks; w++){
     const phase = getPhaseForWeek(w);
-    const hasSatGym = !!phase.sessions.find(s=>s.id==='d2');
-
-    // Build each day's events
+    if(!phase) continue;
     const cells = {};
 
-    // Monday — rest
-    cells.Mon = `<span class="logcal-rest">Rest</span>`;
+    if(CURRENT_PROG==='sfa'){
+      const wk = SFA_RUN_WEEKS[w-1];
+      cells.Mon = strengthEventCell(w,'mon','💪','Strength A','bar-strength','mon');
+      cells.Tue = runEventCell(w,'tue','🏃',wk.tue.desc,'bar-run');
+      cells.Wed = strengthEventCell(w,'wed','💪','Strength B','bar-strength','wed');
+      cells.Thu = runEventCell(w,'thu','⚡',wk.thu.main,'bar-run');
+      cells.Fri = strengthEventCell(w,'fri','🚶','Walk + Mobility','bar-pilates','fri');
+      cells.Sat = runEventCell(w,'sat','🏃',wk.sat.desc,'bar-run') + strengthEventCell(w,'sat-gym','💪','Gym C','bar-strength','sat-gym');
+      cells.Sun = runEventCell(w,'sun','🏅',wk.sun.desc,'bar-run');
+    } else {
+      const wk = RUN_WEEKS[w-1];
+      const hasSatGym = !!phase.sessions.find(s=>s.id==='d2');
+      cells.Mon = `<span class="logcal-rest">Rest</span>`;
+      cells.Tue = runEventCell(w,'tue','🏃',`${wk.tue.km} ${cap(wk.tue.effort)}`,'bar-run');
+      cells.Wed = strengthEventCell(w,'d1','💪','Gym strength','bar-strength','wed');
+      cells.Thu = runEventCell(w,'thu','⚡',wk.thu.main,'bar-run');
+      cells.Fri = strengthEventCell(w,'d3','🧘','Pilates','bar-pilates','fri');
+      let sat = '';
+      if(hasSatGym) sat += strengthEventCell(w,'d2','💪','Gym strength','bar-strength','sat-gym');
+      sat += wk.sat.mtb ? runEventCell(w,'sat','🚵',`MTB ${wk.sat.mtb}`,'bar-mtb') : `<span class="logcal-rest">No ride</span>`;
+      cells.Sat = sat;
+      let sunLabel = `${wk.sun.km} long`;
+      if(wk.sun.isRace) sunLabel = `🏁 RACE`;
+      else if(wk.sun.isBenchmark) sunLabel = `Benchmark`;
+      cells.Sun = runEventCell(w,'sun',wk.sun.isRace?'🏆':'🏅',sunLabel,'bar-run');
+    }
 
-    // Tuesday — run
-    cells.Tue = runEventCell(w, 'tue', '🏃', `${wk.tue.km} ${cap(wk.tue.effort)}`, 'bar-run');
-
-    // Wednesday — strength d1
-    cells.Wed = strengthEventCell(w, 'd1', '💪', 'Gym strength', 'bar-strength', 'wed');
-
-    // Thursday — quality run
-    cells.Thu = runEventCell(w, 'thu', '⚡', `${wk.thu.main}`, 'bar-run');
-
-    // Friday — pilates d3
-    cells.Fri = strengthEventCell(w, 'd3', '🧘', 'Pilates', 'bar-pilates', 'fri');
-
-    // Saturday — gym + MTB
-    let sat = '';
-    if(hasSatGym) sat += strengthEventCell(w, 'd2', '💪', 'Gym strength', 'bar-strength', 'sat-gym');
-    if(wk.sat.mtb) sat += runEventCell(w, 'sat', '🚵', `MTB ${wk.sat.mtb}`, 'bar-mtb');
-    else sat += `<span class="logcal-rest">No ride</span>`;
-    cells.Sat = sat;
-
-    // Sunday — long run
-    let sunLabel = `${wk.sun.km} long`;
-    if(wk.sun.isRace) sunLabel = `🏁 RACE ${wk.sun.km}`;
-    else if(wk.sun.isBenchmark) sunLabel = `Benchmark ${wk.sun.km}`;
-    cells.Sun = runEventCell(w, 'sun', wk.sun.isRace?'🏆':'🏅', sunLabel, 'bar-run');
-
-    const tags = wk.tags.length ? wk.tags[0] : '';
+    const tags = CURRENT_PROG==='sfa' ? phase.name.split(' ')[0] : (RUN_WEEKS[w-1]?.tags[0]||('P'+phase.num));
     rows += `<tr>
-      <td class="wk-cell">${w}<small>${tags||('P'+phase.num)}</small></td>
+      <td class="wk-cell">${w}<small>${tags}</small></td>
       ${dayCols.map(d=>`<td>${cells[d]||'<span class="logcal-empty-day">—</span>'}</td>`).join('')}
     </tr>`;
   }
@@ -2013,7 +2019,13 @@ function switchView(name){
   document.querySelectorAll('.main-nav a').forEach(a=>a.classList.remove('active'));
   const map={calendar:'cal-nav',running:'run-nav',strength:'p1',log:'log-nav'};
   document.querySelector(`.main-nav a.${map[name]}`)?.classList.add('active');
-  if(name==='log'){ if(logMode==='cal') renderLogCalendar(); else renderLogView(); }
+  if(name==='log'){
+    const sub = document.getElementById('log-view-sub');
+    if(sub) sub.textContent = CURRENT_PROG==='sfa'
+      ? 'All saved runs and gym sessions across 12 weeks — Strong & Fit Again.'
+      : 'All saved runs and gym sessions across 16 weeks — Half Marathon Plan.';
+    if(logMode==='cal') renderLogCalendar(); else renderLogView();
+  }
   if(name==='calendar') renderCalendarWeek();
 }
 
@@ -2070,8 +2082,29 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW:',e));
 }
 
-// ── Render immediately from localStorage so page is never blank ──
+// ── One-time migration: rename old msp_/run_/cal_ keys to hm_ prefix ──
+function migrateOldKeys(){
+  try {
+    const allKeys = Object.keys(localStorage);
+    let migrated = 0;
+    allKeys.forEach(k => {
+      let newKey = null;
+      if(k.startsWith('msp_')) newKey = 'hm_' + k.slice(4);
+      else if(k.startsWith('run_w')) newKey = 'hm_run_w' + k.slice(5);
+      else if(k.startsWith('cal_w')) newKey = 'hm_cal_w' + k.slice(5);
+      if(newKey && !localStorage.getItem(newKey)){
+        localStorage.setItem(newKey, localStorage.getItem(k));
+        localStorage.removeItem(k);
+        migrated++;
+      }
+    });
+    if(migrated > 0) console.log(`Migrated ${migrated} old log keys to hm_ prefix`);
+  } catch(e) {}
+}
+
+
 try {
+  migrateOldKeys(); // one-time rename of old msp_/run_/cal_ keys to hm_ prefix
   // Restore programme preference
   const savedProg = localStorage.getItem('runflex_prog') || 'hm';
   CURRENT_PROG = savedProg;
