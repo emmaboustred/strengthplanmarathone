@@ -1336,7 +1336,7 @@ function getSFAPhaseForWeek(w){
 
 
 const SUPABASE_URL = 'https://qyahaeokoxqkryuxhilb.supabase.co';
-const SUPABASE_KEY = 'YOUR_SUPABASE_KEY'; // ← paste your anon key here
+const SUPABASE_KEY = 'sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx'; // ← paste your anon key here
 
 // ═══════════════════════════════════════════════
 //  PROGRAMME STATE
@@ -1394,7 +1394,7 @@ function showSync(state,msg){
 
 // Supabase upsert
 async function sbSet(key,data){
-  if(SUPABASE_KEY==='YOUR_SUPABASE_KEY') return;
+  if(SUPABASE_KEY==='sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx') return;
   const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates'},
@@ -1405,7 +1405,7 @@ async function sbSet(key,data){
 
 // Supabase get all rows
 async function sbGetAll(){
-  if(SUPABASE_KEY==='YOUR_SUPABASE_KEY') return [];
+  if(SUPABASE_KEY==='sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx') return [];
   const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data`,{
     headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
   });
@@ -1429,7 +1429,7 @@ function loadData(key){ return lsGet(key); }
 function clearAllLog(){
   if(!confirm('Delete all saved log data everywhere? This cannot be undone.')) return;
   try{ Object.keys(localStorage).filter(k=>k.startsWith('msp_')||k.startsWith('run_')||k.startsWith('cal_')).forEach(k=>localStorage.removeItem(k)); }catch(e){}
-  if(SUPABASE_KEY!=='YOUR_SUPABASE_KEY'){
+  if(SUPABASE_KEY!=='sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx'){
     fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
       method:'DELETE',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'}
@@ -1440,7 +1440,7 @@ function clearAllLog(){
 
 // On startup — pull everything from Supabase into localStorage
 async function hydrateFromSupabase(){
-  if(SUPABASE_KEY==='YOUR_SUPABASE_KEY'||!navigator.onLine) return;
+  if(SUPABASE_KEY==='sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx'||!navigator.onLine) return;
   showSync('syncing','Loading your data…');
   try{
     const rows=await sbGetAll();
@@ -2036,8 +2036,8 @@ async function testSupabase(){
   el.textContent = 'Testing…';
   el.style.color = 'rgba(239,243,246,0.6)';
 
-  if(SUPABASE_KEY === 'YOUR_SUPABASE_KEY'){
-    el.textContent = '✗ No key set — SUPABASE_KEY is still the placeholder. Open the HTML file, find YOUR_SUPABASE_KEY and replace it with your real anon key.';
+  if(SUPABASE_KEY === 'sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx'){
+    el.textContent = '✗ No key set — SUPABASE_KEY is still the placeholder. Open the HTML file, find sb_secret_RxY_WZ8xKAc5pxQCb23eyA_QBR8wHcx and replace it with your real anon key.';
     el.style.color = '#f87171';
     return;
   }
