@@ -897,46 +897,102 @@ async function sendMagicLink(){
 }
 
 async function checkAuthSession(){
-  // Check URL for magic link token (access_token in hash)
+  // Check URL for magic link token — Supabase puts it in the hash
   const hash = window.location.hash;
-  if(hash.includes('access_token')){
-    const params = new URLSearchParams(hash.replace('#',''));
+  const search = window.location.search;
+
+  // Parse from hash fragment (standard magic link flow)
+  if(hash && hash.length > 1){
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
     if(accessToken){
-      // Store tokens
-      try{
-        localStorage.setItem('rf_access_token', accessToken);
-        if(refreshToken) localStorage.setItem('rf_refresh_token', refreshToken);
-      }catch(e){}
-      // Clear hash from URL cleanly
-      history.replaceState(null,'',window.location.pathname);
+      try{ localStorage.setItem('rf_access_token', accessToken); }catch(e){}
+      if(refreshToken){ try{ localStorage.setItem('rf_refresh_token', refreshToken); }catch(e){} }
+      // Clean the URL
+      history.replaceState(null, '', window.location.pathname);
       await loadUserFromToken(accessToken);
       return;
     }
   }
-  // Check stored token
+
+  // Some Supabase versions put the token in query params
+  if(search){
+    const params = new URLSearchParams(search);
+    const accessToken = params.get('access_token');
+    if(accessToken){
+      try{ localStorage.setItem('rf_access_token', accessToken); }catch(e){}
+      history.replaceState(null, '', window.location.pathname);
+      await loadUserFromToken(accessToken);
+      return;
+    }
+  }
+
+  // Check stored token from a previous session
   const stored = localStorage.getItem('rf_access_token');
-  if(stored) await loadUserFromToken(stored);
-  else showLoginScreen();
+  if(stored){
+    await loadUserFromToken(stored);
+    return;
+  }
+
+  // No token anywhere — show login
+  showLoginScreen();
 }
 
 async function loadUserFromToken(token){
   try{
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token}
+      headers:{
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + token
+      }
     });
     if(res.ok){
       const user = await res.json();
-      CURRENT_USER = user;
-      showApp(user.email);
-    } else {
-      // Token expired or invalid — clear and show login
-      localStorage.removeItem('rf_access_token');
-      localStorage.removeItem('rf_refresh_token');
-      showLoginScreen();
+      if(user && user.id){
+        CURRENT_USER = user;
+        showApp(user.email);
+        return;
+      }
     }
-  } catch(e){ showLoginScreen(); }
+    // Token invalid — try refresh token
+    const refreshToken = localStorage.getItem('rf_refresh_token');
+    if(refreshToken){
+      await refreshSession(refreshToken);
+      return;
+    }
+    // Give up — clear and show login
+    localStorage.removeItem('rf_access_token');
+    localStorage.removeItem('rf_refresh_token');
+    showLoginScreen();
+  } catch(e){
+    console.log('Auth error:', e);
+    showLoginScreen();
+  }
+}
+
+async function refreshSession(refreshToken){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: refreshToken})
+    });
+    if(res.ok){
+      const data = await res.json();
+      if(data.access_token){
+        try{ localStorage.setItem('rf_access_token', data.access_token); }catch(e){}
+        if(data.refresh_token){ try{ localStorage.setItem('rf_refresh_token', data.refresh_token); }catch(e){} }
+        CURRENT_USER = data.user;
+        showApp(data.user.email);
+        return;
+      }
+    }
+  } catch(e){}
+  localStorage.removeItem('rf_access_token');
+  localStorage.removeItem('rf_refresh_token');
+  showLoginScreen();
 }
 
 function showLoginScreen(){
