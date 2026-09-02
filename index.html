@@ -378,6 +378,29 @@
     #view-strength { display:block !important; }
   }
 
+  /* ── AUTH / LOGIN ── */
+  .auth-screen{position:fixed;inset:0;background:var(--petrol-deep);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px}
+  .auth-box{width:100%;max-width:380px}
+  .auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+  .auth-wordmark{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:.12em;color:var(--off-white)}
+  .auth-wordmark span{color:var(--cyan)}
+  .auth-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.04em;color:var(--off-white);margin-bottom:6px}
+  .auth-sub{font-size:13px;color:rgba(239,243,246,0.5);margin-bottom:28px;line-height:1.6}
+  .auth-label{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:rgba(239,243,246,0.5);display:block;margin-bottom:7px}
+  .auth-input{width:100%;font-family:'DM Sans',sans-serif;font-size:15px;padding:12px 14px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.07);color:var(--off-white);margin-bottom:14px;transition:border-color .2s}
+  .auth-input::placeholder{color:rgba(239,243,246,0.3)}
+  .auth-input:focus{outline:none;border-color:var(--cyan)}
+  .auth-btn{width:100%;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;letter-spacing:.05em;padding:13px;border-radius:6px;border:none;background:var(--cyan);color:var(--petrol-deep);cursor:pointer;transition:opacity .2s}
+  .auth-btn:hover{opacity:.88}
+  .auth-btn:disabled{opacity:.5;cursor:default}
+  .auth-msg{margin-top:16px;font-size:13px;text-align:center;line-height:1.6;min-height:20px}
+  .auth-msg.success{color:var(--mint)}
+  .auth-msg.error{color:#f87171}
+  .auth-user-bar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:rgba(0,237,255,0.08);border-bottom:1px solid rgba(0,237,255,0.15)}
+  .auth-user-email{font-size:11px;color:var(--cyan);flex:1;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .auth-signout{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1px solid rgba(0,237,255,0.3);background:transparent;color:var(--cyan);cursor:pointer;transition:all .15s;white-space:nowrap}
+  .auth-signout:hover{background:rgba(0,237,255,0.1)}
+
   /* SYNC */
   .sync-bar{position:fixed;bottom:16px;right:16px;z-index:999;display:flex;align-items:center;gap:6px;background:var(--petrol-deep);color:var(--off-white);font-size:11px;font-weight:500;letter-spacing:.05em;padding:7px 13px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid rgba(0,237,255,0.2)}
   .sync-bar.show{opacity:1}
@@ -640,6 +663,33 @@
 </head>
 <body>
 
+<!-- ══ LOGIN SCREEN ══ -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="22" fill="#263D4D"/>
+        <path d="M10 32 C10 22, 18 14, 22 14 C28 14, 32 18, 32 22 C32 26, 28 28, 24 28 L18 28" stroke="#00EDFF" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M22 28 L30 36" stroke="#B5FFE1" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="32" r="2.5" fill="#00EDFF"/>
+      </svg>
+      <span class="auth-wordmark">Run<span>Flex</span></span>
+    </div>
+    <div class="auth-title">Welcome back.</div>
+    <div class="auth-sub">Enter your email and we'll send you a magic link to sign in — no password needed.</div>
+    <label class="auth-label" for="auth-email">Email address</label>
+    <input class="auth-input" type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+    <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">Send magic link</button>
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<!-- ══ USER BAR (shown when logged in) ══ -->
+<div class="auth-user-bar" id="auth-user-bar" style="display:none">
+  <span class="auth-user-email" id="auth-user-email"></span>
+  <button class="auth-signout" onclick="signOut()">Sign out</button>
+</div>
+
 <section class="hero">
   <div class="hero-top">
     <div class="runflex-mark">
@@ -806,6 +856,122 @@ function toggleDark(){
   const btn = document.getElementById('dark-btn');
   if(btn) btn.textContent = next==='dark' ? '☀ Light' : '☾ Dark';
   try{ localStorage.setItem('runflex_theme', next); }catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+//  SUPABASE AUTH
+// ═══════════════════════════════════════════════
+let CURRENT_USER = null;
+
+async function sendMagicLink(){
+  const email = document.getElementById('auth-email').value.trim();
+  const btn = document.getElementById('auth-btn');
+  const msg = document.getElementById('auth-msg');
+  if(!email){ msg.textContent = 'Please enter your email address.'; msg.className='auth-msg error'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  msg.textContent = '';
+  msg.className = 'auth-msg';
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body: JSON.stringify({email, create_user:true})
+    });
+    if(res.ok){
+      msg.textContent = '✓ Magic link sent! Check your email and tap the link to sign in.';
+      msg.className = 'auth-msg success';
+      btn.textContent = 'Resend link';
+    } else {
+      const err = await res.json();
+      msg.textContent = '✗ ' + (err.msg || err.error_description || 'Something went wrong. Try again.');
+      msg.className = 'auth-msg error';
+      btn.textContent = 'Send magic link';
+    }
+  } catch(e){
+    msg.textContent = '✗ Network error — check your connection.';
+    msg.className = 'auth-msg error';
+    btn.textContent = 'Send magic link';
+  }
+  btn.disabled = false;
+}
+
+async function checkAuthSession(){
+  // Check URL for magic link token (access_token in hash)
+  const hash = window.location.hash;
+  if(hash.includes('access_token')){
+    const params = new URLSearchParams(hash.replace('#',''));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    if(accessToken){
+      // Store tokens
+      try{
+        localStorage.setItem('rf_access_token', accessToken);
+        if(refreshToken) localStorage.setItem('rf_refresh_token', refreshToken);
+      }catch(e){}
+      // Clear hash from URL cleanly
+      history.replaceState(null,'',window.location.pathname);
+      await loadUserFromToken(accessToken);
+      return;
+    }
+  }
+  // Check stored token
+  const stored = localStorage.getItem('rf_access_token');
+  if(stored) await loadUserFromToken(stored);
+  else showLoginScreen();
+}
+
+async function loadUserFromToken(token){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token}
+    });
+    if(res.ok){
+      const user = await res.json();
+      CURRENT_USER = user;
+      showApp(user.email);
+    } else {
+      // Token expired or invalid — clear and show login
+      localStorage.removeItem('rf_access_token');
+      localStorage.removeItem('rf_refresh_token');
+      showLoginScreen();
+    }
+  } catch(e){ showLoginScreen(); }
+}
+
+function showLoginScreen(){
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('auth-user-bar').style.display = 'none';
+}
+
+function showApp(email){
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('auth-user-bar').style.display = 'flex';
+  document.getElementById('auth-user-email').textContent = email;
+  // Initialise the app now that we have a user
+  initApp();
+}
+
+async function signOut(){
+  const token = localStorage.getItem('rf_access_token');
+  if(token){
+    try{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token}
+      });
+    }catch(e){}
+  }
+  localStorage.removeItem('rf_access_token');
+  localStorage.removeItem('rf_refresh_token');
+  CURRENT_USER = null;
+  showLoginScreen();
+}
+
+// Get auth header for Supabase API calls
+function authHeader(){
+  const token = localStorage.getItem('rf_access_token');
+  return token ? {'Authorization':'Bearer '+token} : {};
 }
 
 // ═══════════════════════════════════════════════
@@ -1645,10 +1811,12 @@ function showSync(state,msg){
 // Supabase upsert
 async function sbSet(key,data){
   if(SUPABASE_KEY==='REPLACE_ME') return;
+  const token = localStorage.getItem('rf_access_token');
+  const userId = CURRENT_USER?.id;
   const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
     method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates'},
-    body:JSON.stringify({key,data,updated_at:new Date().toISOString()})
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+(token||SUPABASE_KEY),'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({key, data, user_id: userId, updated_at:new Date().toISOString()})
   });
   if(!res.ok) throw new Error(await res.text());
 }
@@ -1656,8 +1824,9 @@ async function sbSet(key,data){
 // Supabase get all rows
 async function sbGetAll(){
   if(SUPABASE_KEY==='REPLACE_ME') return [];
+  const token = localStorage.getItem('rf_access_token');
   const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data`,{
-    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+(token||SUPABASE_KEY)}
   });
   return await res.json();
 }
@@ -2400,12 +2569,7 @@ async function testSupabase(){
 })();
 
 
-// Register service worker for PWA offline support
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW:',e));
-}
-
-// ── One-time migration: rename old msp_/run_/cal_ keys to hm_ prefix ──
+// ── One-time migration of old key prefixes ──
 function migrateOldKeys(){
   try {
     const allKeys = Object.keys(localStorage);
@@ -2425,39 +2589,39 @@ function migrateOldKeys(){
   } catch(e) {}
 }
 
-
-try {
-  migrateOldKeys(); // one-time rename of old msp_/run_/cal_ keys to hm_ prefix
-  // Restore programme preference
-  const savedProg = localStorage.getItem('runflex_prog') || 'hm';
-  CURRENT_PROG = savedProg;
-  document.getElementById('prog-hm').classList.toggle('active', savedProg==='hm');
-  document.getElementById('prog-sfa').classList.toggle('active', savedProg==='sfa');
-  document.getElementById('prog-c21k')?.classList.toggle('active', savedProg==='c21k');
-  // Set week selector max for SFA (12 weeks), HM and C21K both 16
-  const maxW = savedProg==='sfa' ? 12 : 16;
-  if(maxW===12){
-    ['cal-week-sel','run-week-sel','str-week-sel'].forEach(id=>{
-      const sel=document.getElementById(id);
-      if(sel) sel.innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}">Week ${i+1}</option>`).join('');
-    });
-  }
-  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
-  const btn = document.getElementById('dark-btn');
-  if(btn) btn.textContent = isDark ? '☀ Light' : '☾ Dark';
-  renderCalendarWeek();
-  renderRunWeek();
-  renderStrengthWeek();
-} catch(e){ console.error('Render error:', e); }
-
-// ── Then sync from Supabase in background ──
-hydrateFromSupabase().then(()=>{
+function initApp(){
   try {
+    migrateOldKeys();
+    const savedProg = localStorage.getItem('runflex_prog') || 'hm';
+    CURRENT_PROG = savedProg;
+    document.getElementById('prog-hm').classList.toggle('active', savedProg==='hm');
+    document.getElementById('prog-sfa').classList.toggle('active', savedProg==='sfa');
+    document.getElementById('prog-c21k')?.classList.toggle('active', savedProg==='c21k');
+    const maxW = savedProg==='sfa' ? 12 : 16;
+    if(maxW===12){
+      ['cal-week-sel','run-week-sel','str-week-sel'].forEach(id=>{
+        const sel=document.getElementById(id);
+        if(sel) sel.innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}">Week ${i+1}</option>`).join('');
+      });
+    }
+    const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+    const btn = document.getElementById('dark-btn');
+    if(btn) btn.textContent = isDark ? '☀ Light' : '☾ Dark';
     renderCalendarWeek();
     renderRunWeek();
     renderStrengthWeek();
-  } catch(e){ console.log('Re-render after sync failed:', e); }
-}).catch(e=>console.log('Supabase offline, using local data:', e));
+  } catch(e){ console.error('App init error:', e); }
+  hydrateFromSupabase().then(()=>{
+    try { renderCalendarWeek(); renderRunWeek(); renderStrengthWeek(); }
+    catch(e){ console.log('Re-render after sync failed:', e); }
+  }).catch(e=>console.log('Supabase offline, using local data:', e));
+}
+
+// ── Startup ──
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW:',e));
+}
+checkAuthSession();
 </script>
 </body>
 </html>
