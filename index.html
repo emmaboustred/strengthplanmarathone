@@ -401,6 +401,12 @@
   .auth-signout{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:3px;border:1px solid rgba(0,237,255,0.3);background:transparent;color:var(--cyan);cursor:pointer;transition:all .15s;white-space:nowrap}
   .auth-signout:hover{background:rgba(0,237,255,0.1)}
 
+  .profile-card{width:100%;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.08em;padding:16px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--off-white);cursor:pointer;transition:all .2s;text-align:left}
+  .profile-card:hover{background:rgba(0,237,255,0.1);border-color:var(--cyan);color:var(--cyan)}
+  .profile-card.selected{background:rgba(0,237,255,0.12);border-color:var(--cyan);color:var(--cyan)}
+  .auth-back{font-size:12px;color:rgba(239,243,246,0.4);cursor:pointer;margin-bottom:20px;letter-spacing:.04em;transition:color .15s}
+  .auth-back:hover{color:var(--cyan)}
+
   /* SYNC */
   .sync-bar{position:fixed;bottom:16px;right:16px;z-index:999;display:flex;align-items:center;gap:6px;background:var(--petrol-deep);color:var(--off-white);font-size:11px;font-weight:500;letter-spacing:.05em;padding:7px 13px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid rgba(0,237,255,0.2)}
   .sync-bar.show{opacity:1}
@@ -675,12 +681,24 @@
       </svg>
       <span class="auth-wordmark">Run<span>Flex</span></span>
     </div>
-    <div class="auth-title">Welcome back.</div>
-    <div class="auth-sub">Enter your email and we'll send you a magic link to sign in — no password needed.</div>
-    <label class="auth-label" for="auth-email">Email address</label>
-    <input class="auth-input" type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
-    <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">Send magic link</button>
-    <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-title" id="auth-title">Who's training today?</div>
+
+    <!-- Profile selector -->
+    <div id="auth-profiles" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px">
+      <button class="profile-card" onclick="selectProfile('emma')">Emma</button>
+      <button class="profile-card" onclick="selectProfile('riaan')">Riaan</button>
+      <button class="profile-card" onclick="selectProfile('mix')">Mix</button>
+    </div>
+
+    <!-- Secret word input (hidden until profile selected) -->
+    <div id="auth-secret-panel" style="display:none">
+      <div class="auth-back" onclick="backToProfiles()">← Back</div>
+      <div class="auth-sub" id="auth-sub" style="margin-bottom:16px"></div>
+      <label class="auth-label" for="auth-secret">Secret word</label>
+      <input class="auth-input" type="password" id="auth-secret" placeholder="Enter your secret word" autocomplete="off" onkeydown="if(event.key==='Enter')checkSecret()">
+      <button class="auth-btn" id="auth-btn" onclick="checkSecret()">Let's go →</button>
+      <div class="auth-msg" id="auth-msg"></div>
+    </div>
   </div>
 </div>
 
@@ -859,176 +877,117 @@ function toggleDark(){
 }
 
 // ═══════════════════════════════════════════════
-//  SUPABASE AUTH
+//  PROFILE + SECRET WORD AUTH
 // ═══════════════════════════════════════════════
 let CURRENT_USER = null;
+let SELECTED_PROFILE = null;
 
-async function sendMagicLink(){
-  const email = document.getElementById('auth-email').value.trim();
+// Profiles — secret words stored as SHA-256 hashes
+// Original words: Emma=Pins, Riaan=Liefs, Mix=Bubs
+const PROFILES = {
+  emma:  { name:'Emma',  hash:'75aa48f0047167ddf628f78a68d7d66639eb3d52ed468f2e3c576f9de76bbdbf' },
+  riaan: { name:'Riaan', hash:'b07a1c6f4c6e29e6f2fa12cf923c0af165f16323d3ae36a0cf5770ca5f200148' },
+  mix:   { name:'Mix',   hash:'46db4bc88f91890d0c44ccef68ba8fb255c3ab5fee7647db2bf0c64c21501682' },
+};
+
+// Simple hash function using SubtleCrypto
+async function hashWord(word) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(word.toLowerCase().trim() + '_runflex_salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function selectProfile(profileId) {
+  SELECTED_PROFILE = profileId;
+  const profile = PROFILES[profileId];
+  // Highlight selected card
+  document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+  event.target.classList.add('selected');
+  // Show secret word panel
+  setTimeout(() => {
+    document.getElementById('auth-profiles').style.display = 'none';
+    document.getElementById('auth-secret-panel').style.display = 'block';
+    document.getElementById('auth-title').textContent = `Hey ${profile.name}.`;
+    document.getElementById('auth-sub').textContent = 'Enter your secret word to continue.';
+    document.getElementById('auth-secret').value = '';
+    document.getElementById('auth-msg').textContent = '';
+    document.getElementById('auth-secret').focus();
+  }, 150);
+}
+
+function backToProfiles() {
+  SELECTED_PROFILE = null;
+  document.getElementById('auth-profiles').style.display = 'flex';
+  document.getElementById('auth-secret-panel').style.display = 'none';
+  document.getElementById('auth-title').textContent = 'Who\'s training today?';
+  document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('auth-msg').textContent = '';
+}
+
+async function checkSecret() {
+  const word = document.getElementById('auth-secret').value;
   const btn = document.getElementById('auth-btn');
   const msg = document.getElementById('auth-msg');
-  if(!email){ msg.textContent = 'Please enter your email address.'; msg.className='auth-msg error'; return; }
+  if(!word) { msg.textContent = 'Please enter your secret word.'; msg.className = 'auth-msg error'; return; }
+  if(!SELECTED_PROFILE) return;
+
   btn.disabled = true;
-  btn.textContent = 'Sending…';
+  btn.textContent = 'Checking…';
   msg.textContent = '';
-  msg.className = 'auth-msg';
-  try{
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-      body: JSON.stringify({email, create_user:true})
-    });
-    if(res.ok){
-      msg.textContent = '✓ Magic link sent! Check your email and tap the link to sign in.';
-      msg.className = 'auth-msg success';
-      btn.textContent = 'Resend link';
-    } else {
-      const err = await res.json();
-      msg.textContent = '✗ ' + (err.msg || err.error_description || 'Something went wrong. Try again.');
-      msg.className = 'auth-msg error';
-      btn.textContent = 'Send magic link';
-    }
-  } catch(e){
-    msg.textContent = '✗ Network error — check your connection.';
+
+  const profile = PROFILES[SELECTED_PROFILE];
+  const hash = await hashWord(word);
+
+  if(hash === profile.hash) {
+    // Correct — sign in
+    CURRENT_USER = { id: SELECTED_PROFILE, name: profile.name };
+    try { localStorage.setItem('rf_profile', SELECTED_PROFILE); } catch(e) {}
+    showApp(profile.name);
+  } else {
+    msg.textContent = '✗ That\'s not the right word. Try again.';
     msg.className = 'auth-msg error';
-    btn.textContent = 'Send magic link';
+    document.getElementById('auth-secret').value = '';
+    document.getElementById('auth-secret').focus();
   }
   btn.disabled = false;
+  btn.textContent = 'Let\'s go →';
 }
 
-async function checkAuthSession(){
-  // Check URL for magic link token — Supabase puts it in the hash
-  const hash = window.location.hash;
-  const search = window.location.search;
-
-  // Parse from hash fragment (standard magic link flow)
-  if(hash && hash.length > 1){
-    const params = new URLSearchParams(hash.replace(/^#/, ''));
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const type = params.get('type');
-    if(accessToken){
-      try{ localStorage.setItem('rf_access_token', accessToken); }catch(e){}
-      if(refreshToken){ try{ localStorage.setItem('rf_refresh_token', refreshToken); }catch(e){} }
-      // Clean the URL
-      history.replaceState(null, '', window.location.pathname);
-      await loadUserFromToken(accessToken);
+function checkAuthSession() {
+  // Check for a saved profile
+  try {
+    const saved = localStorage.getItem('rf_profile');
+    if(saved && PROFILES[saved]) {
+      CURRENT_USER = { id: saved, name: PROFILES[saved].name };
+      showApp(PROFILES[saved].name);
       return;
     }
-  }
-
-  // Some Supabase versions put the token in query params
-  if(search){
-    const params = new URLSearchParams(search);
-    const accessToken = params.get('access_token');
-    if(accessToken){
-      try{ localStorage.setItem('rf_access_token', accessToken); }catch(e){}
-      history.replaceState(null, '', window.location.pathname);
-      await loadUserFromToken(accessToken);
-      return;
-    }
-  }
-
-  // Check stored token from a previous session
-  const stored = localStorage.getItem('rf_access_token');
-  if(stored){
-    await loadUserFromToken(stored);
-    return;
-  }
-
-  // No token anywhere — show login
+  } catch(e) {}
   showLoginScreen();
 }
 
-async function loadUserFromToken(token){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers:{
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + token
-      }
-    });
-    if(res.ok){
-      const user = await res.json();
-      if(user && user.id){
-        CURRENT_USER = user;
-        showApp(user.email);
-        return;
-      }
-    }
-    // Token invalid — try refresh token
-    const refreshToken = localStorage.getItem('rf_refresh_token');
-    if(refreshToken){
-      await refreshSession(refreshToken);
-      return;
-    }
-    // Give up — clear and show login
-    localStorage.removeItem('rf_access_token');
-    localStorage.removeItem('rf_refresh_token');
-    showLoginScreen();
-  } catch(e){
-    console.log('Auth error:', e);
-    showLoginScreen();
-  }
-}
-
-async function refreshSession(refreshToken){
-  try{
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'},
-      body: JSON.stringify({refresh_token: refreshToken})
-    });
-    if(res.ok){
-      const data = await res.json();
-      if(data.access_token){
-        try{ localStorage.setItem('rf_access_token', data.access_token); }catch(e){}
-        if(data.refresh_token){ try{ localStorage.setItem('rf_refresh_token', data.refresh_token); }catch(e){} }
-        CURRENT_USER = data.user;
-        showApp(data.user.email);
-        return;
-      }
-    }
-  } catch(e){}
-  localStorage.removeItem('rf_access_token');
-  localStorage.removeItem('rf_refresh_token');
-  showLoginScreen();
-}
-
-function showLoginScreen(){
+function showLoginScreen() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('auth-user-bar').style.display = 'none';
+  backToProfiles();
 }
 
-function showApp(email){
+function showApp(name) {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('auth-user-bar').style.display = 'flex';
-  document.getElementById('auth-user-email').textContent = email;
-  // Initialise the app now that we have a user
+  document.getElementById('auth-user-email').textContent = name;
   initApp();
 }
 
-async function signOut(){
-  const token = localStorage.getItem('rf_access_token');
-  if(token){
-    try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method:'POST',
-        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token}
-      });
-    }catch(e){}
-  }
-  localStorage.removeItem('rf_access_token');
-  localStorage.removeItem('rf_refresh_token');
+function signOut() {
+  try { localStorage.removeItem('rf_profile'); } catch(e) {}
   CURRENT_USER = null;
+  SELECTED_PROFILE = null;
   showLoginScreen();
 }
 
-// Get auth header for Supabase API calls
-function authHeader(){
-  const token = localStorage.getItem('rf_access_token');
-  return token ? {'Authorization':'Bearer '+token} : {};
-}
 
 // ═══════════════════════════════════════════════
 //  RUNNING PLAN DATA
@@ -1842,9 +1801,9 @@ function setProg(prog) {
 // ═══════════════════════════════════════════════
 //  STORAGE — localStorage + Supabase sync
 // ═══════════════════════════════════════════════
-function storageKey(week,sessId,exId){ return `${CURRENT_PROG}_w${week}_${sessId}_${exId}`; }
-function runKey(week,day){ return `${CURRENT_PROG}_run_w${week}_${day}`; }
-function calKey(week,slot){ return `${CURRENT_PROG}_cal_w${week}_${slot}`; }
+function storageKey(week,sessId,exId){ return `${CURRENT_USER?.id||'x'}_${CURRENT_PROG}_w${week}_${sessId}_${exId}`; }
+function runKey(week,day){ return `${CURRENT_USER?.id||'x'}_${CURRENT_PROG}_run_w${week}_${day}`; }
+function calKey(week,slot){ return `${CURRENT_USER?.id||'x'}_${CURRENT_PROG}_cal_w${week}_${slot}`; }
 
 // localStorage fast layer
 function lsSet(key,data){ try{ localStorage.setItem(key,JSON.stringify(data)); }catch(e){} }
@@ -1867,22 +1826,20 @@ function showSync(state,msg){
 // Supabase upsert
 async function sbSet(key,data){
   if(SUPABASE_KEY==='REPLACE_ME') return;
-  const token = localStorage.getItem('rf_access_token');
-  const userId = CURRENT_USER?.id;
   const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
     method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+(token||SUPABASE_KEY),'Prefer':'resolution=merge-duplicates'},
-    body:JSON.stringify({key, data, user_id: userId, updated_at:new Date().toISOString()})
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({key, data, updated_at:new Date().toISOString()})
   });
   if(!res.ok) throw new Error(await res.text());
 }
 
-// Supabase get all rows
+// Supabase get rows for this profile (keys start with profile ID)
 async function sbGetAll(){
   if(SUPABASE_KEY==='REPLACE_ME') return [];
-  const token = localStorage.getItem('rf_access_token');
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data`,{
-    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+(token||SUPABASE_KEY)}
+  const profilePrefix = CURRENT_USER?.id || 'x';
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data&key=like.${profilePrefix}_%`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
   });
   return await res.json();
 }
