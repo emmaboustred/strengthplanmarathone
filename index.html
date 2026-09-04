@@ -1593,10 +1593,11 @@ async function sbSet(key,data){
 async function sbGetAll(){
   if(SUPABASE_KEY==='REPLACE_ME') return [];
   const profilePrefix = CURRENT_USER?.id || 'x';
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data&key=like.${profilePrefix}_%`,{
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/training_log?select=key,data&key=like.${profilePrefix}_%&limit=100000`,{
     headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
   });
-  return await res.json();
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
 }
 
 // Public API — saveData writes localStorage immediately, syncs to Supabase async
@@ -1637,15 +1638,16 @@ async function clearAllLog(){
   if(logMode==='cal') renderLogCalendar(); else renderLogView();
 }
 
-// On startup — pull everything from Supabase into localStorage
+// On startup — pull everything for this profile from Supabase into localStorage
 async function hydrateFromSupabase(){
-  if(SUPABASE_KEY==='REPLACE_ME'||!navigator.onLine) return;
+  if(SUPABASE_KEY==='REPLACE_ME') return;
   showSync('syncing','Loading your data…');
   try{
     const rows=await sbGetAll();
     rows.forEach(({key,data})=>lsSet(key,data));
-    showSync('synced','Up to date ✓');
+    showSync('synced',`Up to date ✓ (${rows.length})`);
   } catch(e){
+    console.warn('Hydration error:', e);
     showSync('offline','Offline — using local data');
   }
 }
