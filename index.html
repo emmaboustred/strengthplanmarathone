@@ -245,6 +245,19 @@
   .log-week-group{margin-bottom:28px}
   .log-week-hdr{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:.05em;padding:8px 0;border-bottom:2px solid var(--text);margin-bottom:12px;color:var(--text)}
   .log-entry{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 17px;margin-bottom:8px;transition:background .25s}
+  .log-session{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden;transition:background .25s}
+  .log-session-hdr{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;transition:background .15s}
+  .log-session-hdr:hover{background:var(--surface2)}
+  .log-session-icon{font-size:15px;flex-shrink:0}
+  .log-session-title{font-size:13.5px;font-weight:500;color:var(--text);flex:1}
+  .log-session-count{font-size:11px;color:var(--text-muted);white-space:nowrap}
+  .log-session-chevron{font-size:12px;color:var(--text-muted);flex-shrink:0;width:12px;text-align:center}
+  .log-session-body{display:none;border-top:1px solid var(--border);padding:4px 0}
+  .log-session-body.open{display:block}
+  .log-ex-detail{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 15px;font-size:12.5px;border-bottom:1px solid var(--border)}
+  .log-ex-detail:last-child{border-bottom:none}
+  .log-ex-name{color:var(--text);flex:1}
+  .log-ex-val{color:var(--text-muted);font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
   .log-entry-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px}
   .log-entry-name{font-size:13px;font-weight:500;flex:1;color:var(--text)}
   .log-entry-session{font-size:11px;color:var(--text-muted);white-space:nowrap}
@@ -527,7 +540,7 @@
   <div class="main">
     <div class="week-bar">
       <label for="cal-week-sel">Week</label>
-      <select class="week-select" id="cal-week-sel" onchange="renderCalendarWeek()">
+      <select class="week-select" id="cal-week-sel" onchange="onWeekChange('cal-week-sel')">
         <option value="1">Week 1</option><option value="2">Week 2</option><option value="3">Week 3</option>
         <option value="4">Week 4</option><option value="5">Week 5</option><option value="6">Week 6</option>
         <option value="7">Week 7</option><option value="8">Week 8</option><option value="9">Week 9</option>
@@ -552,7 +565,7 @@
   <div class="main">
     <div class="week-bar">
       <label for="run-week-sel">Week</label>
-      <select class="week-select" id="run-week-sel" onchange="renderRunWeek()">
+      <select class="week-select" id="run-week-sel" onchange="onWeekChange('run-week-sel')">
         <option value="1">Week 1</option><option value="2">Week 2</option><option value="3">Week 3</option>
         <option value="4">Week 4</option><option value="5">Week 5</option><option value="6">Week 6</option>
         <option value="7">Week 7</option><option value="8">Week 8</option><option value="9">Week 9</option>
@@ -579,7 +592,7 @@
   <div class="main">
     <div class="week-bar">
       <label for="str-week-sel">Week</label>
-      <select class="week-select" id="str-week-sel" onchange="renderStrengthWeek()">
+      <select class="week-select" id="str-week-sel" onchange="onWeekChange('str-week-sel')">
         <option value="1">Week 1</option><option value="2">Week 2</option><option value="3">Week 3</option>
         <option value="4">Week 4</option><option value="5">Week 5</option><option value="6">Week 6</option>
         <option value="7">Week 7</option><option value="8">Week 8</option><option value="9">Week 9</option>
@@ -605,7 +618,7 @@
     </div>
     <div class="print-bar">
       <button class="btn-print" onclick="window.print()">🖨 Print full programme</button>
-      <button class="btn-clear-log" onclick="clearAllLog()">Clear all log data</button>
+      <button class="btn-clear-log" onclick="clearAllLog()">Clear this programme's log</button>
     </div>
     <div id="log-calendar"></div>
     <div id="log-entries" style="display:none"></div>
@@ -639,6 +652,17 @@ function toggleDark(){
 
 // Capitalise first letter — used throughout rendering
 function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+
+// Escape user-entered text before inserting into innerHTML (prevents HTML/script injection)
+function esc(s){
+  if(s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
 
 // ═══════════════════════════════════════════════
 //  PROFILE + SECRET WORD AUTH
@@ -818,12 +842,12 @@ function renderRunWeek() {
     const v = saved || {};
     return `<div class="run-log-row" id="run-log-${w}-${day}">
       <div class="run-log-grid">
-        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${v.km||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 28:30" value="${v.time||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${v.pace||''}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
-        <div class="run-log-field"><label class="run-log-label">Avg heart rate (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${v.hr||''}" type="number" min="60" max="220"></div>
+        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${esc(v.km)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 28:30" value="${esc(v.time)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${esc(v.pace)}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
+        <div class="run-log-field"><label class="run-log-label">Avg heart rate (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${esc(v.hr)}" type="number" min="60" max="220"></div>
       </div>
-      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel? Any notes…" value="${v.note||''}">
+      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel? Any notes…" value="${esc(v.note)}">
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn-save-run" onclick="saveRunLog('${w}','${day}')">Save</button>
         <span class="run-saved-badge" id="run-saved-${w}-${day}">✓ Saved</span>
@@ -888,12 +912,12 @@ function renderSFARunWeek() {
     const v = saved || {};
     return `<div class="run-log-row" id="run-log-${w}-${day}">
       <div class="run-log-grid">
-        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${v.km||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 28:30" value="${v.time||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${v.pace||''}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
-        <div class="run-log-field"><label class="run-log-label">Avg HR (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${v.hr||''}" type="number" min="60" max="220"></div>
+        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${esc(v.km)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 28:30" value="${esc(v.time)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${esc(v.pace)}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
+        <div class="run-log-field"><label class="run-log-label">Avg HR (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${esc(v.hr)}" type="number" min="60" max="220"></div>
       </div>
-      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel?" value="${v.note||''}">
+      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel?" value="${esc(v.note)}">
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn-save-run" onclick="saveRunLog('${w}','${day}')">Save</button>
         <span class="run-saved-badge" id="run-saved-${w}-${day}">✓ Saved</span>
@@ -962,12 +986,12 @@ function renderC21KRunWeek() {
     const v = saved || {};
     return `<div class="run-log-row" id="run-log-${w}-${day}">
       <div class="run-log-grid">
-        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${v.km||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 30:00" value="${v.time||''}" oninput="calcPace('${w}','${day}')"></div>
-        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${v.pace||''}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
-        <div class="run-log-field"><label class="run-log-label">Avg HR (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${v.hr||''}" type="number" min="60" max="220"></div>
+        <div class="run-log-field"><label class="run-log-label">Distance (km)</label><input class="run-log-input" id="rlog-km-${w}-${day}" placeholder="e.g. 5.2" value="${esc(v.km)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Time (mm:ss)</label><input class="run-log-input" id="rlog-time-${w}-${day}" placeholder="e.g. 30:00" value="${esc(v.time)}" oninput="calcPace('${w}','${day}')"></div>
+        <div class="run-log-field"><label class="run-log-label">Pace / km (auto)</label><input class="run-log-input" id="rlog-pace-${w}-${day}" placeholder="—" value="${esc(v.pace)}" readonly style="background:var(--cream);font-weight:600;color:var(--run-dark)"></div>
+        <div class="run-log-field"><label class="run-log-label">Avg HR (bpm)</label><input class="run-log-input" id="rlog-hr-${w}-${day}" placeholder="e.g. 148" value="${esc(v.hr)}" type="number" min="60" max="220"></div>
       </div>
-      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel?" value="${v.note||''}">
+      <input class="run-log-note" id="rlog-note-${w}-${day}" placeholder="How did it feel?" value="${esc(v.note)}">
       <div style="display:flex;align-items:center;gap:8px">
         <button class="btn-save-run" onclick="saveRunLog('${w}','${day}')">Save</button>
         <span class="run-saved-badge" id="run-saved-${w}-${day}">✓ Saved</span>
@@ -998,13 +1022,13 @@ function renderC21KRunWeek() {
         ${logBtn('thu')}${logPanel('thu', loadData(runKey(w,'thu')))}
       </div>
       <div class="run-day saturday ${isSat?'benchmark-day':''}">
-        <div class="run-day-label"><span class="day-dot dot-sun"></span>Saturday — Long Run ${savedBadge(loadData(runKey(w,'sat')))}</div>
+        <div class="run-day-label"><span class="day-dot dot-sat"></span>Saturday — Long Run ${savedBadge(loadData(runKey(w,'sat')))}</div>
         <div class="run-day-main">${wk.sat.desc}</div>
         <div class="run-day-sub">${wk.sat.note}</div>
         ${logBtn('sat')}${logPanel('sat', loadData(runKey(w,'sat')))}
       </div>
       <div class="run-day sunday">
-        <div class="run-day-label"><span class="day-dot dot-sat"></span>Sunday — Optional</div>
+        <div class="run-day-label"><span class="day-dot dot-sun"></span>Sunday — Optional</div>
         <div class="run-day-main" style="color:var(--text-muted)">Easy walk / mobility</div>
         <div class="run-day-sub">Rest if needed — this is optional</div>
       </div>
@@ -1078,7 +1102,7 @@ function showRunPrev(w, day) {
   const el = document.getElementById(`run-prev-${w}-${day}`);
   if (!el || !data) return;
   const hrText = data.hr ? ` · ♥ ${data.hr} bpm` : '';
-  el.innerHTML = `<strong>Last week (Wk ${prevW}):</strong> ${data.km||'—'} km · ${data.time||'—'} · ${data.pace||'—'}/km${hrText}${data.note ? ' · '+data.note : ''}`;
+  el.innerHTML = `<strong>Last week (Wk ${prevW}):</strong> ${data.km||'—'} km · ${data.time||'—'} · ${data.pace||'—'}/km${hrText}${data.note ? ' · '+esc(data.note) : ''}`;
   el.style.display = 'block';
 }
 
@@ -1614,22 +1638,31 @@ function saveData(key,data){
 function loadData(key){ return lsGet(key); }
 
 async function clearAllLog(){
-  if(!confirm('Delete all saved log data everywhere? This cannot be undone.')) return;
-  // Clear localStorage first
+  const profile = CURRENT_USER?.id;
+  const profileName = CURRENT_USER?.name || 'your';
+  if(!profile){ alert('No profile selected.'); return; }
+  const progLabels = {hm:'Half Marathon', sfa:'Strong & Fit Again', c21k:'Couch to 21K'};
+  const progLabel = progLabels[CURRENT_PROG] || CURRENT_PROG;
+  const prefix = `${profile}_${CURRENT_PROG}_`;  // e.g. emma_sfa_
+  if(!confirm(`Clear ${profileName}'s log for the ${progLabel} programme?\n\nThis only clears this one programme for ${profileName} — other programmes and other people are untouched. This cannot be undone.`)) return;
+
+  // Clear only THIS profile + THIS programme's localStorage keys
   try{
     Object.keys(localStorage)
-      .filter(k=>k.startsWith('hm_')||k.startsWith('sfa_')||k.startsWith('msp_')||k.startsWith('run_')||k.startsWith('cal_'))
-      .forEach(k=>localStorage.removeItem(k));
-  }catch(e){}
-  // Wait for Supabase to confirm deletion before re-rendering
+      .filter(k => k.startsWith(prefix))
+      .forEach(k => localStorage.removeItem(k));
+  }catch(e){ console.error('Local clear failed:', e); }
+
+  // Delete only THIS profile + THIS programme's rows from Supabase
   if(SUPABASE_KEY!=='REPLACE_ME'){
     showSync('syncing','Clearing cloud data…');
     try{
-      await fetch(`${SUPABASE_URL}/rest/v1/training_log`,{
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/training_log?key=like.${prefix}%25`,{
         method:'DELETE',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'}
       });
-      showSync('synced','All data cleared ✓');
+      if(res.ok) showSync('synced',`${progLabel} log cleared ✓`);
+      else { showSync('error','Cloud clear failed — try again'); console.warn('Clear failed:', await res.text()); }
     } catch(e){
       showSync('error','Cloud clear failed — try again');
       console.warn('Supabase clear failed:',e);
@@ -1638,14 +1671,24 @@ async function clearAllLog(){
   if(logMode==='cal') renderLogCalendar(); else renderLogView();
 }
 
-// On startup — pull everything for this profile from Supabase into localStorage
+// On startup — pull this profile's rows from Supabase, but never overwrite newer local edits
 async function hydrateFromSupabase(){
   if(SUPABASE_KEY==='REPLACE_ME') return;
   showSync('syncing','Loading your data…');
   try{
     const rows=await sbGetAll();
-    rows.forEach(({key,data})=>lsSet(key,data));
-    showSync('synced',`Up to date ✓ (${rows.length})`);
+    let applied = 0, skipped = 0;
+    rows.forEach(({key,data})=>{
+      const local = lsGet(key);
+      // If no local copy, always take the cloud version
+      if(!local){ lsSet(key, data); applied++; return; }
+      // Both exist — compare timestamps. Keep whichever is newer.
+      const localTime = Date.parse(local?.savedAt || 0) || 0;
+      const cloudTime = Date.parse(data?.savedAt || 0) || 0;
+      if(cloudTime > localTime){ lsSet(key, data); applied++; }
+      else { skipped++; }  // local is same-or-newer — keep local, don't clobber
+    });
+    showSync('synced',`Up to date ✓`);
   } catch(e){
     console.warn('Hydration error:', e);
     showSync('offline','Offline — using local data');
@@ -1700,7 +1743,8 @@ function renderSession(week,phase,sess){
     ? `<div class="pilates-note">${sess.warmup}</div>`
     : `<div class="session-warmup">${sess.warmup}</div>`;
 
-  const exRows = sess.exercises.map(ex => {
+  const exRows = sess.exercises.map((ex, exIdx) => {
+    const exTotal = sess.exercises.length;
     if(sess.pilates){
       const uid = `${week}-${sess.id}-${ex.id}`;
       return `<div class="ex-row pilates-ex-row" id="row-${uid}">
@@ -1722,7 +1766,7 @@ function renderSession(week,phase,sess){
           <span class="col-hdr">Set</span><span class="col-hdr">Reps</span>
           <span class="col-hdr">Weight</span><span class="col-hdr">Notes</span><span class="col-hdr"></span>
         </div>
-        <div class="log-sets" id="sets-${week}-${sess.id}-${ex.id}">${defaultSetRows(week,sess.id,ex.id,ex.target)}</div>
+        <div class="log-sets" id="sets-${week}-${sess.id}-${ex.id}">${defaultSetRows(week,sess.id,ex.id,ex.target,exIdx,exTotal)}</div>
         <div class="log-actions">
           <button class="btn-add-set" onclick="addSet('${week}','${sess.id}','${ex.id}','${ex.target||''}')">+ Add set</button>
           <span class="auto-saved" id="saved-${week}-${sess.id}-${ex.id}">✓ Saved</span>
@@ -1745,7 +1789,7 @@ function renderSession(week,phase,sess){
 const WEEK_SCHEME = {
   1:  {sets:2, reps:8},
   2:  {sets:2, reps:10},
-  3:  {sets:3, reps:10},  // 3rd set added to last 3 exercises — we apply 3 sets throughout for simplicity
+  3:  {sets:3, reps:10},  // base 3 sets; defaultSetRows applies 3rd set only to last 3 exercises this week
   4:  {sets:3, reps:10},
   5:  {sets:3, reps:10},
   6:  {sets:2, reps:8},   // phase 2 resets: familiarise with new exercises
@@ -1768,25 +1812,42 @@ function getWeekScheme(week) {
 }
 
 // Get the last saved weight for this exercise (from any previous week)
+// Returns the top (heaviest) working weight from the most recent week this exercise was logged.
+// Used to pre-fill the weight field — heaviest is the meaningful anchor for progressive overload.
 function getLastWeight(sessId, exId, currentWeek) {
   for (let w = currentWeek - 1; w >= 1; w--) {
     const d = loadData(storageKey(w, sessId, exId));
     if (d?.sets?.length) {
-      const withWeight = d.sets.find(s => s.weight);
-      if (withWeight) return withWeight.weight;
+      // Find the heaviest numeric weight logged that session
+      let best = null;
+      d.sets.forEach(s => {
+        if(!s.weight) return;
+        const num = parseFloat(String(s.weight).replace(/[^\d.]/g, ''));
+        if(!isNaN(num) && (best === null || num > best.num)) best = { num, raw: s.weight };
+      });
+      if(best) return best.raw;         // return the original string (e.g. "10 kg")
+      // no numeric weight but sets exist (e.g. bodyweight) — stop searching, return blank
+      const anyWeight = d.sets.find(s => s.weight);
+      if(anyWeight) return anyWeight.weight;
     }
   }
   return '';
 }
 
-function defaultSetRows(week, sessId, exId, target) {
+function defaultSetRows(week, sessId, exId, target, exIdx, exTotal) {
   const lastWeight = getLastWeight(sessId, exId, week);
   const isTimeBased = target && /sec|min/i.test(target);
 
   // HM plan uses week-driven progression (2×8 → 3×10 etc)
   // SFA and C21K are exercise-driven — each exercise has its own sets/reps in the target
   if(CURRENT_PROG === 'hm'){
-    const {sets, reps} = getWeekScheme(week);
+    let {sets, reps} = getWeekScheme(week);
+    // Week 3 accuracy: the plan adds the 3rd set only to the LAST 3 exercises.
+    // Earlier exercises stay at 2 sets that week.
+    if(+week === 3 && typeof exIdx === 'number' && typeof exTotal === 'number'){
+      const isLastThree = exIdx >= (exTotal - 3);
+      sets = isLastThree ? 3 : 2;
+    }
     return Array.from({length: sets}, (_, i) =>
       setRowHtml(week, sessId, exId, i+1, isTimeBased ? '' : reps, lastWeight, '')
     ).join('');
@@ -1805,14 +1866,17 @@ function defaultSetRows(week, sessId, exId, target) {
   ).join('');
 }
 
-// Parse "3 × 10–12" or "2 × 8 each" into {sets, reps} — reps uses the lower end of a range
+// Parse "3 × 10–12" or "2 × 8 each" into {sets, reps}.
+// NOTE: reps pre-fills at the LOWER end of a range as a conservative starting suggestion —
+// this is a UX default, not a claim that the plan prescribes the low end. The full target
+// range is always shown next to the exercise name.
 function parseSetsAndReps(target) {
   if (!target) return null;
   if (/sec|min/i.test(target)) return { sets: parseInt((target.match(/(\d+)\s*[×x]/)||[])[1] || 2), reps: '' };
   const m = target.match(/(\d+)(?:[–\-](\d+))?\s*[×x]\s*(\d+)(?:[–\-](\d+))?/);
   if (!m) return null;
   const sets = m[2] ? parseInt(m[2]) : parseInt(m[1]);  // upper end of set range
-  const reps = parseInt(m[3]);  // lower end of rep range (start conservative)
+  const reps = parseInt(m[3]);  // lower end of rep range — conservative starting suggestion
   return { sets, reps };
 }
 
@@ -1832,9 +1896,9 @@ function setRowHtml(week,sessId,exId,setNum,reps,weight,note){
   const autoSave=`autoSaveExercise('${week}','${sessId}','${exId}')`;
   return `<div class="log-set-row" id="setrow-${uid}">
     <span class="set-label">Set ${setNum}</span>
-    <input class="log-input" type="number" min="0" placeholder="Reps" value="${reps||''}" id="reps-${uid}" onblur="${autoSave}" oninput="${autoSave}">
-    <input class="log-input" type="text" placeholder="kg / BW" value="${weight||''}" id="weight-${uid}" onblur="${autoSave}">
-    <input class="log-input" type="text" placeholder="Note" value="${note||''}" id="snote-${uid}" onblur="${autoSave}">
+    <input class="log-input" type="number" min="0" placeholder="Reps" value="${esc(reps)}" id="reps-${uid}" onblur="${autoSave}" oninput="${autoSave}">
+    <input class="log-input" type="text" placeholder="kg / BW" value="${esc(weight)}" id="weight-${uid}" onblur="${autoSave}">
+    <input class="log-input" type="text" placeholder="Note" value="${esc(note)}" id="snote-${uid}" onblur="${autoSave}">
     <button class="del-set" onclick="delSet('${week}','${sessId}','${exId}',${setNum})">×</button>
   </div>`;
 }
@@ -1861,6 +1925,8 @@ function delSet(week,sessId,exId,setNum){
   if(row) row.remove();
   const c=document.getElementById(`sets-${week}-${sessId}-${exId}`);
   c.querySelectorAll('.log-set-row').forEach((r,i)=>{ r.querySelector('.set-label').textContent=`Set ${i+1}`; });
+  // Persist the deletion immediately so a reload doesn't bring the set back
+  saveExercise(week,sessId,exId,true);
 }
 // Auto-save debounce timer per exercise
 const autoSaveTimers = {};
@@ -1925,11 +1991,31 @@ function restoreExercise(week,sessId,exId,isPilates){
   showPrevLog(week,sessId,exId);
 }
 function showPrevLog(week,sessId,exId){
-  const prev=+week-1; if(prev<1) return;
-  const data=loadData(storageKey(prev,sessId,exId));
+  // Search back for the most recent week this exercise was logged (not just week-1)
+  let prev = 0, data = null;
+  for(let w = +week - 1; w >= 1; w--){
+    const d = loadData(storageKey(w, sessId, exId));
+    if(d?.sets?.some(s=>s.reps||s.weight)){ prev = w; data = d; break; }
+  }
   const el=document.getElementById(`prev-${week}-${sessId}-${exId}`);
-  if(!el||!data?.sets) return;
-  el.innerHTML=`<strong>Last week (Wk ${prev}):</strong><br>${data.sets.map(s=>`Set ${s.set}: ${s.reps||'—'} reps @ ${s.weight||'—'}${s.note?' · '+s.note:''}`).join('<br>')}`;
+  if(!el || !data){ if(el) el.style.display='none'; return; }
+
+  // Work out the top (heaviest) set for a quick "beat this" reference
+  let top = null;
+  data.sets.forEach(s => {
+    if(!s.weight) return;
+    const num = parseFloat(String(s.weight).replace(/[^\d.]/g,''));
+    if(!isNaN(num) && (top===null || num > top.num)) top = { num, weight:s.weight, reps:s.reps };
+  });
+
+  const setLines = data.sets
+    .filter(s => s.reps || s.weight)
+    .map(s => `Set ${s.set}: ${esc(s.reps)||'—'} reps @ ${esc(s.weight)||'—'}${s.note?' · '+esc(s.note):''}`)
+    .join('<br>');
+
+  const topLine = top ? `<div style="margin-bottom:4px"><strong>Top set:</strong> ${esc(top.reps)||'—'} reps @ ${esc(top.weight)} — aim to beat this</div>` : '';
+
+  el.innerHTML = `${topLine}<strong>Last logged (Wk ${prev}):</strong><br>${setLines}`;
   el.style.display='block';
 }
 function togglePilates(week,sessId,exId){
@@ -1957,43 +2043,71 @@ function renderLogView(){
     : [{key:'tue',label:'Tuesday'},{key:'thu',label:'Thursday'},{key:'sat',label:'Saturday MTB'},{key:'sun',label:'Sunday'}];
 
   for(let w=1;w<=maxWeeks;w++){
-    let weekHtml='', runHtml='', strHtml='';
+    let runHtml='', strHtml='';
+
+    // Running entries (stay flat — they're one line each)
     runDays.forEach(({key,label})=>{
       const d=loadData(runKey(w,key)); if(!d||(!d.km&&!d.time)) return;
       hasAny=true;
       runHtml+=`<div class="log-entry">
         <div class="log-entry-hdr"><span class="log-entry-name">${label}</span><span class="log-entry-session" style="color:var(--p2)">🏃 Running</span></div>
-        <div class="log-entry-sets">${d.km||'—'} km · ${d.time||'—'} · ${d.pace||'—'}/km${d.hr?' · ♥ '+d.hr+' bpm':''}${d.note?' · <em>'+d.note+'</em>':''}</div>
+        <div class="log-entry-sets">${d.km||'—'} km · ${d.time||'—'} · ${d.pace||'—'}/km${d.hr?' · ♥ '+esc(d.hr)+' bpm':''}${d.note?' · <em>'+esc(d.note)+'</em>':''}</div>
       </div>`;
     });
+
     const phase=getPhaseForWeek(w);
     if(!phase) continue;
+
+    // Strength — one collapsible header per session
     phase.sessions.forEach(sess=>{
+      let sessionDetail='', loggedCount=0;
+
       sess.exercises.forEach(ex=>{
         const data=loadData(storageKey(w,sess.id,ex.id)); if(!data) return;
         if(sess.pilates){
-          if(!data.done) return; hasAny=true;
-          strHtml+=`<div class="log-entry">
-            <div class="log-entry-hdr"><span class="log-entry-name">${ex.name}</span><span class="log-entry-session" style="color:var(--pilates)">🧘 Mobility</span></div>
-            <div class="log-entry-sets" style="color:var(--p1)">✓ Completed</div>
-          </div>`;
+          if(!data.done) return;
+          loggedCount++;
+          sessionDetail+=`<div class="log-ex-detail"><span class="log-ex-name">${ex.name}</span><span class="log-ex-val" style="color:var(--p1)">✓ Done</span></div>`;
         } else {
-          if(!data.sets?.some(s=>s.reps||s.weight)) return; hasAny=true;
-          strHtml+=`<div class="log-entry">
-            <div class="log-entry-hdr"><span class="log-entry-name">${ex.name}</span><span class="log-entry-session">💪 ${sess.label}</span></div>
-            <div class="log-entry-sets">${data.sets.map(s=>`Set ${s.set}: <strong>${s.reps||'—'} reps</strong> @ <strong>${s.weight||'—'}</strong>${s.note?' · '+s.note:''}`).join(' &nbsp;|&nbsp; ')}</div>
-          </div>`;
+          if(!data.sets?.some(s=>s.reps||s.weight)) return;
+          loggedCount++;
+          const sets=data.sets.map(s=>`${esc(s.reps)||'—'}×${esc(s.weight)||'BW'}`).join('  ');
+          sessionDetail+=`<div class="log-ex-detail"><span class="log-ex-name">${ex.name}</span><span class="log-ex-val">${sets}</span></div>`;
         }
       });
+
+      if(loggedCount>0){
+        hasAny=true;
+        const icon = sess.pilates ? '🧘' : '💪';
+        const uid = `logsess-${w}-${sess.id}`;
+        strHtml+=`<div class="log-session">
+          <div class="log-session-hdr" onclick="toggleLogSession('${uid}')">
+            <span class="log-session-icon">${icon}</span>
+            <span class="log-session-title">${sess.label}</span>
+            <span class="log-session-count">${loggedCount} logged</span>
+            <span class="log-session-chevron" id="chev-${uid}">▸</span>
+          </div>
+          <div class="log-session-body" id="${uid}">${sessionDetail}</div>
+        </div>`;
+      }
     });
+
     if(runHtml||strHtml){
       html+=`<div class="log-week-group"><div class="log-week-hdr">Week ${w} — Phase ${phase.num}</div>`;
       if(runHtml) html+=`<div class="log-section-title">Running</div>${runHtml}`;
-      if(strHtml) html+=`<div class="log-section-title">Gym & Pilates</div>${strHtml}`;
+      if(strHtml) html+=`<div class="log-section-title">Strength & Mobility</div>${strHtml}`;
       html+=`</div>`;
     }
   }
   container.innerHTML = hasAny ? html : '<div class="log-empty">No logged sessions yet. Open a week in Running or Strength and tap Log.</div>';
+}
+
+function toggleLogSession(uid){
+  const body = document.getElementById(uid);
+  const chev = document.getElementById('chev-'+uid);
+  if(!body) return;
+  const open = body.classList.toggle('open');
+  if(chev) chev.textContent = open ? '▾' : '▸';
 }
 
 // ── Log view mode toggle ──
@@ -2126,7 +2240,7 @@ function runSessionLogged(week, day){
 function isMissed(week, slot){ return !!loadData(calKey(week,slot))?.missed; }
 function toggleMissed(week, slot){
   const cur = isMissed(week, slot);
-  saveData(calKey(week,slot), {missed:!cur});
+  saveData(calKey(week,slot), {missed:!cur, savedAt:new Date().toISOString()});
   renderCalendarWeek();
 }
 
@@ -2398,15 +2512,39 @@ function migrateOldKeys(){
   } catch(e) {}
 }
 
+// Remember the current week per profile + programme
+function weekMemKey(){ return `${CURRENT_USER?.id||'x'}_${CURRENT_PROG}_currentweek`; }
+function saveCurrentWeek(w){ try{ localStorage.setItem(weekMemKey(), String(w)); }catch(e){ console.error('Week save failed:', e); } }
+function getSavedWeek(prog){
+  try{
+    const v = localStorage.getItem(`${CURRENT_USER?.id||'x'}_${prog}_currentweek`);
+    const n = parseInt(v);
+    return (n && n >= 1) ? n : 1;
+  }catch(e){ return 1; }
+}
+
+// Called by the week selectors when the user changes week — saves and re-renders
+function onWeekChange(fromView){
+  // Sync all three selectors to the chosen week, save it, then re-render everything
+  const src = document.getElementById(fromView);
+  const w = +src.value || 1;
+  ['cal-week-sel','run-week-sel','str-week-sel'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(sel && +sel.value !== w) sel.value = w;
+  });
+  saveCurrentWeek(w);
+  renderAll();
+}
+
 function rebuildWeekSelectors(prog){
   const maxWeeks = prog==='sfa' ? 12 : 16;
+  let target = getSavedWeek(prog);
+  if(target > maxWeeks) target = 1;
   ['cal-week-sel','run-week-sel','str-week-sel'].forEach(id=>{
     const sel=document.getElementById(id);
     if(!sel) return;
-    let cur = +sel.value || 1;
-    if(cur > maxWeeks) cur = 1;
-    sel.innerHTML = Array.from({length:maxWeeks},(_,i)=>`<option value="${i+1}"${cur===i+1?' selected':''}>Week ${i+1}</option>`).join('');
-    sel.value = cur;
+    sel.innerHTML = Array.from({length:maxWeeks},(_,i)=>`<option value="${i+1}"${target===i+1?' selected':''}>Week ${i+1}</option>`).join('');
+    sel.value = target;
   });
 }
 
